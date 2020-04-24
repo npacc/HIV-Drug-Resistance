@@ -3,7 +3,7 @@
 //Second DSL1 HIV Pipeline written using containers outside of the earlier conda environment
 
 //PUSHING TO GIT
-//git add test_trim.nf
+//git add HIV_DSL1_containers.nf
 //git commit -m 'message'
 //git push origin master
 
@@ -38,4 +38,20 @@ process TrimmedGalore {
     """
     trim_galore --fastqc --paired ${forward} ${reverse}
     """
+}
+
+//MULTI QC REPORT
+process MultiQC {
+    publishDir "${FastqDir}/TrimmedGalore/MultiQC"
+
+    input:
+    file("*") from txtfiles.collect().combine(htmlfiles.collect())
+
+    output:
+    file "multiqc_report.html"
+
+    script:
+     """
+      multiqc -m cutadapt -m fastqc -n multiqc_report.html .
+     """
 }
