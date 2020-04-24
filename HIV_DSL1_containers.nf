@@ -18,7 +18,7 @@ PairFilesChannel = Channel.fromFilePairs( "${FastqFiles}", flat: true )
 
 //TRIM READS
 process TrimmedGalore {
-    container "/home/centos/nextflow/singularity/singularity-files/test_Matt.sif"
+    container "/home/centos/nextflow/singularity/singularity-files/trimgalore-test.sif"
 
     cpus 2
     
@@ -42,6 +42,8 @@ process TrimmedGalore {
 
 //MULTI QC REPORT
 process MultiQC {
+    container "/home/centos/nextflow/singularity/singularity-files/multiqc-test.sif"
+
     publishDir "${FastqDir}/TrimmedGalore/MultiQC"
 
     input:
