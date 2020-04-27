@@ -58,7 +58,6 @@ process MultiQC {
      """
 }
 
-/*
 //SETUP REFERENCES 
 Ch_HIVComp = Channel.fromPath( "${FastqDir}/HIVRefs/hivcomp2015.fasta" ) 
 Ch_HIVHXB2 = Channel.fromPath( "${FastqDir}/HIVRefs/HXB2.fasta" )
@@ -81,4 +80,3 @@ process CleanHIVReads {
     picard SamToFastq VALIDATION_STRINGENCY=LENIENT I=clean.bam F=${dataset_id}.clean_1.fq.gz F2=${dataset_id}.clean_2.fq.gz
     """
 }
-*/
