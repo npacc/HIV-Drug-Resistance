@@ -18,7 +18,7 @@ PairFilesChannel = Channel.fromFilePairs( "${FastqFiles}", flat: true )
 
 //TRIM READS
 process TrimmedGalore {
-    container "/home/centos/nextflow/singularity/singularity-files/trimgalore-test.sif"
+    container "/home/centos/nextflow/Def-Files/singularity-files/trimgalore-test.sif"
 
     cpus 2
     
@@ -42,7 +42,7 @@ process TrimmedGalore {
 
 //MULTI QC REPORT
 process MultiQC {
-    container "/home/centos/nextflow/singularity/singularity-files/multiqc-test.sif"
+    container "/home/centos/nextflow/Def-Files/singularity-files/multiqc-test.sif"
 
     publishDir "${FastqDir}/TrimmedGalore/MultiQC"
 
@@ -57,3 +57,28 @@ process MultiQC {
       multiqc -m cutadapt -m fastqc -n multiqc_report.html .
      """
 }
+
+/*
+//SETUP REFERENCES 
+Ch_HIVComp = Channel.fromPath( "${FastqDir}/HIVRefs/hivcomp2015.fasta" ) 
+Ch_HIVHXB2 = Channel.fromPath( "${FastqDir}/HIVRefs/HXB2.fasta" )
+
+//CLEAN HIV READS
+process CleanHIVReads {
+    container "/home/centos/nextflow/Def-Files/singularity-files/minimap2-test.sif"
+
+    cpus 4
+
+    input:
+    tuple dataset_id, file(forward), file(reverse), file(ref) from TrimmedReads.combine(Ch_HIVComp)
+
+    output:
+    tuple dataset_id, file("${dataset_id}.clean_1.fq.gz"), file("${dataset_id}.clean_2.fq.gz") into HIVCleanReadsAssembly, HIVCleanReadsPolishing, HIVCleanReadsVariantCalling
+
+    script:
+    """
+    minimap2 -x sr -a $ref $forward $reverse | samtools view -F 4 -b > clean.bam
+    picard SamToFastq VALIDATION_STRINGENCY=LENIENT I=clean.bam F=${dataset_id}.clean_1.fq.gz F2=${dataset_id}.clean_2.fq.gz
+    """
+}
+*/
