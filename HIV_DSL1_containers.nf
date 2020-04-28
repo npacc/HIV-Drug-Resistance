@@ -80,3 +80,62 @@ process CleanHIVReads {
     picard SamToFastq VALIDATION_STRINGENCY=LENIENT I=clean.bam F=${dataset_id}.clean_1.fq.gz F2=${dataset_id}.clean_2.fq.gz
     """
 }
+
+/*
+//ASSEMBLE HIV READS
+process AssembleHIVReads {
+    container "/home/centos/nextflow/Def-Files/singularity-files/iva-test.sif"
+
+    cpus 4
+
+    input:
+    tuple dataset_id, file(forward), file(reverse) from HIVCleanReadsAssembly
+
+    output:
+    tuple dataset_id, file("${dataset_id}.iva.fa") optional true into HIVIVAAssembly
+    file("*.log")
+    script:
+    """
+    if iva -v -f $forward -r $reverse iva_assembly 2>&1 > ${dataset_id}.iva.log ; then
+      mv iva_assembly/contigs.fasta ${dataset_id}.iva.fa
+    else
+      mv ${dataset_id}.iva.log ${dataset_id}.iva.fail.log
+    fi
+    """
+}
+
+//HIV SHIVER
+
+// Setup init_dir for shiver
+ShiverInit = Channel.fromPath( "${FastqDir}/nextflow_pipelines/config/hiv/shiver_init_HIV/shiver_init_HIV" )
+ShiverConf = Channel.fromPath( "${FastqDir}/nextflow_pipelines/config/hiv/shiver_init_HIV/config.sh" )
+
+process HIVShiver {
+    container "/home/centos/nextflow/Def-Files/singularity-files/shiver-test.sif"
+
+    publishDir "${FastqDir}/Shiver", pattern: "${dataset_id}.shiver.fa", mode: 'copy'
+    publishDir "${FastqDir}/Shiver", pattern: "${dataset_id}.shiverlog.txt", mode: 'copy'   
+
+    input:
+    tuple dataset_id, file(assembly), file(forward), file(reverse), file(shiverconf), file(shiverinit) from HIVIVAAssembly.join(HIVCleanReadsPolishing, by: [0]).combine(ShiverConf).combine(ShiverInit)
+
+    output:
+    tuple dataset_id, file("${dataset_id}.shiver.fa") optional true into HIVAssemblyBAM, HIVAssemblyVariants
+    file("${dataset_id}.shiver.txt") optional true
+    file("${dataset_id}.shiverlog.txt") optional true
+
+    script:
+     """
+    if shiver_align_contigs.sh ${shiverinit} ${shiverconf} ${assembly} ${dataset_id}; then
+        if [ -f ${dataset_id}_cut_wRefs.fasta ]; then
+            shiver_map_reads.sh ${shiverinit} ${shiverconf} ${assembly} ${dataset_id} ${dataset_id}.blast ${dataset_id}_cut_wRefs.fasta ${forward} ${reverse}
+        else
+            shiver_map_reads.sh ${shiverinit} ${shiverconf} ${assembly} ${dataset_id} ${dataset_id}.blast ${dataset_id}_raw_wRefs.fasta ${forward} ${reverse}
+        fi
+        seqtk seq -l0 ${dataset_id}_remap_consensus_MinCov_15_30.fasta | head -n2 | sed '/>/!s/-//g' | sed 's/\\?/N/g' | sed 's/_remap_consensus//g' | seqtk seq -l80 > ${dataset_id}.shiver.fa
+    else
+        echo "No HIV contigs found. This sample is likely to be purely contamination" > ${dataset_id}.shiverlog.txt
+    fi
+    """
+}
+*/
