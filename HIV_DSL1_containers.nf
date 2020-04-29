@@ -81,7 +81,6 @@ process CleanHIVReads {
     """
 }
 
-/*
 //ASSEMBLE HIV READS
 process AssembleHIVReads {
     container "/home/centos/nextflow/Def-Files/singularity-files/iva-test.sif"
@@ -138,4 +137,89 @@ process HIVShiver {
     fi
     """
 }
-*/
+
+//HIV MAPPING VARIANT CALLING
+process HIVMappingVariantCalling {
+    cpus 4
+
+    container "/home/centos/nextflow/Def-Files/singularity-files/minimap2-test.sif"
+
+    input:
+    tuple dataset_id, file(forward), file(reverse), file(assembly) from HIVCleanReadsVariantCalling.join(HIVAssemblyBAM, by: [0])
+
+    output:
+    tuple dataset_id, file("${dataset_id}.variants.bam") into HIVMappingNoDupsBAM
+
+    script:
+    """
+    samtools faidx $assembly
+    minimap2 -x sr -a $assembly $forward $reverse | samtools view -@ 2 -b | samtools sort -@ 2 -o ${dataset_id}.variants.bam
+    """
+}
+
+//SETUP MINOR VARIANT FREQUENCY LIST
+params.minvarfreq = ['0.2', '0.1', '0.01']
+Channel.from(params.minvarfreq).set{ MinVarFreq}
+
+//Set default variant strategy (VarScan, BCFtools or LoFreq)
+params.variantstrategy = 'VarScan'
+
+//HIV VARIANT CALLING VAR SCAN
+process HIVVariantCallingVarScan {
+    container "/home/centos/nextflow/Def-Files/singularity-files/variantcalling-test.sif"
+
+    publishDir "${FastqDir}/CallVariants/fasta/minor_variants", pattern: "${dataset_id}.${minvarfreq}.minor.fa", mode: 'copy'
+    publishDir "${FastqDir}/CallVariants/fasta/IUPAC", pattern: "${dataset_id}.${minvarfreq}.iupac.consensus.fa", mode: 'copy'
+    publishDir "${FastqDir}/CallVariants/vcf", pattern: "${dataset_id}.${minvarfreq}.consensus.vcf", mode: 'copy'
+
+    input:
+    tuple dataset_id, file(bam), file(assembly), minvarfreq from HIVMappingNoDupsBAM.join(HIVAssemblyVariants, by: [0]).combine(MinVarFreq)
+
+    output:
+    tuple dataset_id, minvarfreq, file("*.${minvarfreq}.iupac.consensus.fa") into HIVAssemblyWithVariants
+    file "${dataset_id}.${minvarfreq}.minor.fa"
+    file "${dataset_id}.${minvarfreq}.consensus.vcf"
+
+    script:
+    """
+    samtools mpileup --max-depth 10000000 --redo-BAQ --min-MQ 17 --min-BQ 20 --output ${dataset_id}.mpileup --fasta-ref ${assembly} ${bam}
+    java -Xmx17G -jar /home/centos/miniconda3/envs/trialrun/share/varscan-2.4.4-0/VarScan.jar mpileup2cns ${dataset_id}.mpileup --min-var-freq ${minvarfreq} --p-value 95e-02 --min-coverage 100 --output-vcf 1 > ${dataset_id}.varscan.cns.vcf
+    bgzip ${dataset_id}.varscan.cns.vcf
+    tabix -p vcf ${dataset_id}.varscan.cns.vcf.gz
+    bcftools view -i'FILTER="PASS"' -Oz -o ${dataset_id}.varscan.cns.filtered.vcf.gz ${dataset_id}.varscan.cns.vcf.gz
+    zcat ${dataset_id}.varscan.cns.filtered.vcf.gz > ${dataset_id}.${minvarfreq}.consensus.vcf
+    tabix -p vcf ${dataset_id}.varscan.cns.filtered.vcf.gz
+    bcftools consensus -f $assembly ${dataset_id}.varscan.cns.filtered.vcf.gz --output ${dataset_id}.${minvarfreq}.minor.fa
+    bcftools consensus -I -f $assembly ${dataset_id}.varscan.cns.filtered.vcf.gz --output ${dataset_id}.${minvarfreq}.iupac.consensus.fa
+    sed -i 's/polished/consensus-minor/g' ${dataset_id}.${minvarfreq}.minor.fa
+    sed -i 's/polished/consensus-iupac/g' ${dataset_id}.${minvarfreq}.iupac.consensus.fa
+    sed -i '/^>/ s/\$/ [Variant caller: ${params.variantstrategy}] [Minor variant bases IUPAC] [Variant frequency: ${minvarfreq}] /' ${dataset_id}.${minvarfreq}.iupac.consensus.fa
+    sed -i '/^>/ s/\$/ [Variant caller: ${params.variantstrategy}] [Minor variants bases ONLY] [Variant frequency: ${minvarfreq}] /' ${dataset_id}.${minvarfreq}.minor.fa
+    """
+}
+
+//SET MINOR VARIANT FREQUENCY AT WHICH TO CALL RESISTANCE (must be one of the values in params.minvarfreq)
+params.selectedminvarfreq = '0.2'
+HIVAssemblyWithSelectedMinVarFreq = HIVAssemblyWithVariants.filter{ it[1] == params.selectedminvarfreq }
+
+//MAKE HIV RESISTANCE REPORT
+process HIVMakeResistanceReport {
+    container "/home/centos/nextflow/Def-Files/singularity-files/sierappy-test.sif"
+
+    publishDir "${FastqDir}/Resistance/analysis/04-call_resistance", pattern: "${dataset_id}.json", mode: 'copy'
+    publishDir "${FastqDir}/Resistance/analysis/05-generate_report", pattern: "${dataset_id}.rtf", mode: 'copy'
+    publishDir "${FastqDir}/Resistance/reports", pattern: "${dataset_id}.rtf", mode: 'copy'
+
+    input:
+    tuple dataset_id, minvarfreq, file(variantassembly) from HIVAssemblyWithSelectedMinVarFreq
+
+    output:
+    file("${dataset_id}.json")
+    file("${dataset_id}.rtf")
+
+    script:
+    episodenumber = dataset_id.split('-').last()
+    """
+    buildreport.pl -i ${variantassembly} -n ${dataset_id} -l PHW_Cardiff
+    """
+} 
