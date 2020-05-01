@@ -103,12 +103,33 @@ process AssembleHIVReads {
     """
 }
 
-//HIV SHIVER
+//SHIVER INIT
+params.shiverinitdir = "/home/centos/nextflow/HIV-Drug-Resistance/config/hiv/shiver_init_HIV/"
+params.shiverconf = "/home/centos/nextflow/HIV-Drug-Resistance/config/hiv/shiver_init_HIV/config/config.sh"
+ShiverInitDir = Channel.fromPath( "${params.shiverinitdir}", type: 'dir')
+Channel.fromPath( "${params.shiverconf}").set{ShiverConf1}
+Channel.fromPath( "${params.shiverconf}").set{ShiverConf2}
 
-// Setup init_dir for shiver
-ShiverInit = Channel.fromPath( "${FastqDir}/nextflow_pipelines/config/hiv/shiver_init_HIV/shiver_init_HIV" )
-ShiverConf = Channel.fromPath( "${FastqDir}/nextflow_pipelines/config/hiv/shiver_init_HIV/config.sh" )
+process ShiverInit {
+    container "/home/centos/nextflow/Def-Files/singularity-files/shiver-test.sif"
+    
+    input:
+    file(dir) from ShiverInitDir
+    file(conf) from ShiverConf1
 
+    output:
+    file("shiver_init_HIV/") into ShiverInit
+
+    script:
+    """
+    shiver_init.sh MyInitDir /home/centos/nextflow/HIV-Drug-Resistance/config/hiv/shiver_init_HIV/config/config.sh \
+    /home/centos/nextflow/HIV-Drug-Resistance/config/hiv/shiver_init_HIV/ExistingRefAlignment.fasta \
+    /home/centos/nextflow/HIV-Drug-Resistance/config/hiv/shiver_init_HIV/adapters.fasta \
+    /home/centos/nextflow/HIV-Drug-Resistance/config/hiv/shiver_init_HIV/primers.fasta
+    """
+}
+
+//SHIVER
 process HIVShiver {
     container "/home/centos/nextflow/Def-Files/singularity-files/shiver-test.sif"
 
@@ -116,7 +137,7 @@ process HIVShiver {
     publishDir "${FastqDir}/Shiver", pattern: "${dataset_id}.shiverlog.txt", mode: 'copy'   
 
     input:
-    tuple dataset_id, file(assembly), file(forward), file(reverse), file(shiverconf), file(shiverinit) from HIVIVAAssembly.join(HIVCleanReadsPolishing, by: [0]).combine(ShiverConf).combine(ShiverInit)
+    tuple dataset_id, file(assembly), file(forward), file(reverse), file(shiverconf), file(shiverinit) from HIVIVAAssembly.join(HIVCleanReadsPolishing, by: [0]).combine(ShiverConf2).combine(ShiverInit)
 
     output:
     tuple dataset_id, file("${dataset_id}.shiver.fa") optional true into HIVAssemblyBAM, HIVAssemblyVariants
@@ -138,6 +159,7 @@ process HIVShiver {
     """
 }
 
+/*
 //HIV MAPPING VARIANT CALLING
 process HIVMappingVariantCalling {
     cpus 4
@@ -223,3 +245,4 @@ process HIVMakeResistanceReport {
     buildreport.pl -i ${variantassembly} -n ${dataset_id} -l PHW_Cardiff
     """
 } 
+*/
