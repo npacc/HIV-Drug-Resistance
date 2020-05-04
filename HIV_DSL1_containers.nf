@@ -118,7 +118,7 @@ process ShiverInit {
     file(conf) from ShiverConf1
 
     output:
-    file("shiver_init_HIV/") into ShiverInit
+    file("MyInitDir/") into ShiverInit
 
     script:
     """
@@ -146,6 +146,7 @@ process HIVShiver {
 
     script:
      """
+    export TMPDIR=./tmp/
     if shiver_align_contigs.sh ${shiverinit} ${shiverconf} ${assembly} ${dataset_id}; then
         if [ -f ${dataset_id}_cut_wRefs.fasta ]; then
             shiver_map_reads.sh ${shiverinit} ${shiverconf} ${assembly} ${dataset_id} ${dataset_id}.blast ${dataset_id}_cut_wRefs.fasta ${forward} ${reverse}
@@ -159,7 +160,6 @@ process HIVShiver {
     """
 }
 
-/*
 //HIV MAPPING VARIANT CALLING
 process HIVMappingVariantCalling {
     cpus 4
@@ -205,7 +205,7 @@ process HIVVariantCallingVarScan {
     script:
     """
     samtools mpileup --max-depth 10000000 --redo-BAQ --min-MQ 17 --min-BQ 20 --output ${dataset_id}.mpileup --fasta-ref ${assembly} ${bam}
-    java -Xmx17G -jar /home/centos/miniconda3/envs/trialrun/share/varscan-2.4.4-0/VarScan.jar mpileup2cns ${dataset_id}.mpileup --min-var-freq ${minvarfreq} --p-value 95e-02 --min-coverage 100 --output-vcf 1 > ${dataset_id}.varscan.cns.vcf
+    java -Xmx17G -jar /usr/local/bin/varscan.jar mpileup2cns ${dataset_id}.mpileup --min-var-freq ${minvarfreq} --p-value 95e-02 --min-coverage 100 --output-vcf 1 > ${dataset_id}.varscan.cns.vcf
     bgzip ${dataset_id}.varscan.cns.vcf
     tabix -p vcf ${dataset_id}.varscan.cns.vcf.gz
     bcftools view -i'FILTER="PASS"' -Oz -o ${dataset_id}.varscan.cns.filtered.vcf.gz ${dataset_id}.varscan.cns.vcf.gz
@@ -219,7 +219,7 @@ process HIVVariantCallingVarScan {
     sed -i '/^>/ s/\$/ [Variant caller: ${params.variantstrategy}] [Minor variants bases ONLY] [Variant frequency: ${minvarfreq}] /' ${dataset_id}.${minvarfreq}.minor.fa
     """
 }
-
+/*
 //SET MINOR VARIANT FREQUENCY AT WHICH TO CALL RESISTANCE (must be one of the values in params.minvarfreq)
 params.selectedminvarfreq = '0.2'
 HIVAssemblyWithSelectedMinVarFreq = HIVAssemblyWithVariants.filter{ it[1] == params.selectedminvarfreq }
