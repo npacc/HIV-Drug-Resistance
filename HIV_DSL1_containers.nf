@@ -18,7 +18,8 @@ PairFilesChannel = Channel.fromFilePairs( "${FastqFiles}", flat: true )
 
 //TRIM READS
 process TrimmedGalore {
-    container "/home/centos/nextflow/Def-Files/singularity-files/trimgalore-test.sif"
+    //container "/home/centos/nextflow/Def-Files/singularity-files/trimgalore-test.sif"
+    container 'trim_galore_docker:v.01'
 
     cpus 2
     
@@ -42,7 +43,8 @@ process TrimmedGalore {
 
 //MULTI QC REPORT
 process MultiQC {
-    container "/home/centos/nextflow/Def-Files/singularity-files/multiqc-test.sif"
+    //container "/home/centos/nextflow/Def-Files/singularity-files/multiqc-test.sif"
+    container 'multiqc_docker:v.01'
 
     publishDir "${FastqDir}/TrimmedGalore/MultiQC"
 
@@ -64,7 +66,8 @@ Ch_HIVHXB2 = Channel.fromPath( "${FastqDir}/HIVRefs/HXB2.fasta" )
 
 //CLEAN HIV READS
 process CleanHIVReads {
-    container "/home/centos/nextflow/Def-Files/singularity-files/minimap2-test.sif"
+    //container "/home/centos/nextflow/Def-Files/singularity-files/minimap2-test.sif"
+    container 'minimap2_docker:v.01'
 
     cpus 4
 
@@ -81,9 +84,11 @@ process CleanHIVReads {
     """
 }
 
+
 //ASSEMBLE HIV READS
 process AssembleHIVReads {
-    container "/home/centos/nextflow/Def-Files/singularity-files/iva-test.sif"
+    //container "/home/centos/nextflow/Def-Files/singularity-files/iva-test.sif"
+    container 'iva_docker:v.01'
 
     cpus 4
 
@@ -111,8 +116,9 @@ Channel.fromPath( "${params.shiverconf}").set{ShiverConf1}
 Channel.fromPath( "${params.shiverconf}").set{ShiverConf2}
 
 process ShiverInit {
-    container "/home/centos/nextflow/Def-Files/singularity-files/shiver-test.sif"
-    
+    //container "/home/centos/nextflow/Def-Files/singularity-files/shiver-test.sif"
+    container 'shiver_docker:v.01'
+
     input:
     file(dir) from ShiverInitDir
     file(conf) from ShiverConf1
@@ -131,7 +137,8 @@ process ShiverInit {
 
 //SHIVER
 process HIVShiver {
-    container "/home/centos/nextflow/Def-Files/singularity-files/shiver-test.sif"
+    //container "/home/centos/nextflow/Def-Files/singularity-files/shiver-test.sif"
+    container 'shiver_docker:v.01'
 
     publishDir "${FastqDir}/Shiver", pattern: "${dataset_id}.shiver.fa", mode: 'copy'
     publishDir "${FastqDir}/Shiver", pattern: "${dataset_id}.shiverlog.txt", mode: 'copy'   
@@ -164,7 +171,8 @@ process HIVShiver {
 process HIVMappingVariantCalling {
     cpus 4
 
-    container "/home/centos/nextflow/Def-Files/singularity-files/minimap2-test.sif"
+    //container "/home/centos/nextflow/Def-Files/singularity-files/minimap2-test.sif"
+    container 'minimap2_docker:v.01'
 
     input:
     tuple dataset_id, file(forward), file(reverse), file(assembly) from HIVCleanReadsVariantCalling.join(HIVAssemblyBAM, by: [0])
@@ -186,9 +194,11 @@ Channel.from(params.minvarfreq).set{ MinVarFreq}
 //Set default variant strategy (VarScan, BCFtools or LoFreq)
 params.variantstrategy = 'VarScan'
 
+
 //HIV VARIANT CALLING VAR SCAN
 process HIVVariantCallingVarScan {
-    container "/home/centos/nextflow/Def-Files/singularity-files/variantcalling-test.sif"
+    //container "/home/centos/nextflow/Def-Files/singularity-files/variantcalling-test.sif"
+    container 'variant_calling_docker:v.01'
 
     publishDir "${FastqDir}/CallVariants/fasta/minor_variants", pattern: "${dataset_id}.${minvarfreq}.minor.fa", mode: 'copy'
     publishDir "${FastqDir}/CallVariants/fasta/IUPAC", pattern: "${dataset_id}.${minvarfreq}.iupac.consensus.fa", mode: 'copy'
@@ -219,14 +229,15 @@ process HIVVariantCallingVarScan {
     sed -i '/^>/ s/\$/ [Variant caller: ${params.variantstrategy}] [Minor variants bases ONLY] [Variant frequency: ${minvarfreq}] /' ${dataset_id}.${minvarfreq}.minor.fa
     """
 }
-/*
+
 //SET MINOR VARIANT FREQUENCY AT WHICH TO CALL RESISTANCE (must be one of the values in params.minvarfreq)
 params.selectedminvarfreq = '0.2'
 HIVAssemblyWithSelectedMinVarFreq = HIVAssemblyWithVariants.filter{ it[1] == params.selectedminvarfreq }
 
 //MAKE HIV RESISTANCE REPORT
 process HIVMakeResistanceReport {
-    container "/home/centos/nextflow/Def-Files/singularity-files/sierappy-test.sif"
+    //container "/home/centos/nextflow/Def-Files/singularity-files/sierrapy-test.sif"
+    container 'sierrapy_docker:v.01'
 
     publishDir "${FastqDir}/Resistance/analysis/04-call_resistance", pattern: "${dataset_id}.json", mode: 'copy'
     publishDir "${FastqDir}/Resistance/analysis/05-generate_report", pattern: "${dataset_id}.rtf", mode: 'copy'
@@ -245,4 +256,3 @@ process HIVMakeResistanceReport {
     buildreport.pl -i ${variantassembly} -n ${dataset_id} -l PHW_Cardiff
     """
 } 
-*/
